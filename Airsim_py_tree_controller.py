@@ -24,43 +24,88 @@ import py_trees
 import time
 
 
-class Action(py_trees.behaviour.Behaviour):
+class TakeoffAction(py_trees.behaviour.Behaviour):
 
-    def __init__(self, name="Action"):
-        super(Action, self).__init__(name)
-        self.percentageComplete = 0
-        self.drone_data = None
+    def __init__(self, name="Hover"):
+        super(TakeoffAction, self).__init__(name)
+        #blackboard = py_trees.blackboard.Client(name="Airsim")
+        blackboard.register_key(key="client", access=py_trees.common.Access.READ)
+        blackboard.register_key(key="z_axis", access=py_trees.common.Access.WRITE)
+        blackboard.register_key(key="z_axis", access=py_trees.common.Access.READ)
 
-    def setup(self):
-        # Connect to the airsim client
-        self.client = airsim.MultirotorClient()
-        self.client.confirmConnection() # repeatedly check client connection every 1s
-        self.client.enableApiControl(True) # Enables autonmous api control instead of manual human control
-        self.client.armDisarm(True)
-        self.drone_data = self.client.getDistanceSensorData("Distance", "TestDrone")
-
+        self.isComplete = False
+        self.runningStatus = False
+        self.client = blackboard.client
+ 
     def initalise(self):
-        self.percentageComplete = 0
+        if self.isComplete == False:
+            self.runningStatus = False
+            print("initalising..")
         
     def update(self):
-        new_status = py_trees.common.Status.RUNNING
-        if self.percentageComplete == 100:
-            new_status = py_trees.common.Status.SUCCESS
 
-        if new_status != py_trees.common.Status.SUCCESS:
-            self.percentageComplete += 10
-            print(self.percentageComplete)
-            print("drone data: " + str(self.drone_data))
+        print(self.runningStatus)
+
+
+        # TODO: - z axis means up??? this needs to be fixed... check simGetVehiclePose
+        blackboard.z_axis = self.client.simGetVehiclePose().position.z_val
+        print("Drone's Z axis: " + str(blackboard.z_axis))
+        
+        if self.runningStatus == True:
+            new_status = py_trees.common.Status.RUNNING
+        else:
+            #self.client.takeoffAsync()
+
+            self.client.moveToZAsync(-4, 5)
+            new_status = py_trees.common.Status.RUNNING
+            self.runningStatus = True
+        
+        if round(blackboard.z_axis) == -4 or self.isComplete == True:
+            print("Successfuly Taken Off!")
+            new_status = py_trees.common.Status.SUCCESS
+            self.isComplete = True
 
         return new_status
 
+class FlyTowardsAction(py_trees.behaviour.Behaviour):
+    def __init__(self):
+        super().__init__()
+        self.counter = 0
+    def initalise(self):
+        #self.counter = 0
+        print("initalising..")
 
-action = Action()
-action.setup()
+    def update(self):
+        status = py_trees.common.Status.RUNNING
+        self.counter += 1
+        print("updating...")
+
+        if self.counter == 10:
+            status = py_trees.common.Status.SUCCESS
+
+        return status
+
+# Initalize and store Airsim client info
+blackboard = py_trees.blackboard.Client(name="Airsim")
+blackboard.register_key(key="client", access=py_trees.common.Access.WRITE)
+
+blackboard.client = airsim.MultirotorClient()
+blackboard.client.confirmConnection()
+blackboard.client.enableApiControl(True)
+blackboard.client.armDisarm(True)
+#print(py_trees.display.unicode_blackboard())
+
+root = py_trees.composites.Sequence("Sequence")
+takeoff = TakeoffAction()
+flytowards = FlyTowardsAction()
+root.add_children([takeoff, flytowards])
+
+behavior_tree = py_trees.trees.BehaviourTree(root=root)
+
 
 try:
-    for i in range(0, 10):
-        action.tick_once()
+    for i in range(0, 100):
+        behavior_tree.tick()
         time.sleep(0.5)
     print("\n")
 except KeyboardInterrupt:
