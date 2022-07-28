@@ -25,7 +25,7 @@
     <Compile Include="Behaviors\GetBBTarget.py">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Behaviors\FlyToBBTargetAction.py">
+    <Compile Include="Behaviors\FlyToBBTargetsAction.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Blackboard\BlackboardManager.py">

@@ -24,7 +24,7 @@ import airsim
 import os
 import py_trees
 import time
-from Behaviors.FlyToBBTargetAction import FlyToBBTargetAction
+from Behaviors.FlyToBBTargetsAction import FlyToBBTargetsAction
 from Behaviors.GetBBTarget import GetBBTarget
 from Blackboard.BlackboardManager import BlackboardManager
 
@@ -126,15 +126,6 @@ class LandAction(py_trees.behaviour.Behaviour):
 
         return new_status
 
-        """
-        print("Landing...")
-        state = blackboard.client.getMultirotorState()
-        print(state.landed_state)
-
-        status = py_trees.common.Status.RUNNING
-        blackboard.client.landAsync()
-        """
-        return status
 
 """class FlyTowardsAction(py_trees.behaviour.Behaviour):
     def __init__(self, duration=None, waypoints=[]):
@@ -226,7 +217,12 @@ airsimBlackboardManager.registerKey(key="drone/landed_state")
 #blackboard.register_key(key="drone/landed_state", access=py_trees.common.Access.READ)
 
 # Create a serise of waypoints visiable in simulation
-waypoints = [airsim.Vector3r(10,5,0), airsim.Vector3r(-10,5,0)]
+waypoints = [
+    airsim.Vector3r(10,0,-5), 
+    airsim.Vector3r(-10,0,-5),
+    airsim.Vector3r(-10,-10,-5),
+    airsim.Vector3r(10,-10,-5),
+]
 
 blackboard = airsimBlackboardManager.getBlackboard()
 
@@ -251,42 +247,20 @@ def post_tick_handler(snapshot_visitor, behaviour_tree):
     )
 
 
-blackboard.client.simPlotPoints(points=waypoints, size=50, is_persistent=True)
+blackboard.client.simPlotPoints(points=waypoints, size=25, is_persistent=True)
 
 # Create behavior tree nodes
 root = py_trees.composites.Sequence("Sequence1")
 flightSequence = py_trees.composites.Sequence("Flight Sequence")
 takeoff = TakeoffAction("Take Off", -2)
-#flytowards = FlyTowardsAction(10)
-#flytowards = FlyTowardsAction(target=airsim.Vector3r(10,0,0))
-
-waypointSequence = py_trees.composites.Sequence("Waypoint Sequence")
 
 # Queries for a target location, flys to it
-flyToBBTarget = FlyToBBTargetAction()
-getBBTarget = GetBBTarget(waypoints=blackboard.drone.waypoints)
+flyToBBTargets = FlyToBBTargetsAction(waypoints=blackboard.drone.waypoints)
 land = LandAction()
 
-# Get target will fail if there are no more targets available, this will
-anyTargets = py_trees.decorators.FailureIsSuccess(
-    name="Any Targets",
-    child=getBBTarget
-)
-
-flyWaypoints = py_trees.decorators.FailureIsRunning(
-    name="Fly Target",
-    child=flyToBBTarget
-)
-
-"""anyWaypoints = py_trees.decorators.FailureIsSuccess(
-    name="Fly to all Targets",
-    child=waypointSequence
-)"""
-#land = zAxisAction("Land", 2, 0)
 
 # Construct the BT by linking the created nodes
-flightSequence.add_children([takeoff, waypointSequence])
-waypointSequence.add_children([anyTargets, flyWaypoints])
+flightSequence.add_children([takeoff, flyToBBTargets])
 root.add_children([flightSequence, land])
 behavior_tree = py_trees.trees.BehaviourTree(root=root)
 

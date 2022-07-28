@@ -42,9 +42,9 @@ class GetBBTarget(py_trees.behaviour.Behaviour):
         return target
     
     def initialise(self):
-    
-        if self.blackboard.drone.target == None:
-            return py_trees.common.Status.RUNNING
+        print("INITALIZING GETBBTARGET")
+        #if self.blackboard.drone.target == None:
+        #   return py_trees.common.Status.RUNNING
 
     def update(self):
 
@@ -57,6 +57,7 @@ class GetBBTarget(py_trees.behaviour.Behaviour):
         # If the blackboard target is empty it can either be due to the flyToTarget behavior has finished, or there are no more targets
         # Attempt to get more targets, will return none if no targets
         if self.blackboard.drone.target == None:
+            print("GETTING NEW TARGET")
             self.blackboard.drone.target = self._get_target()
             if self.blackboard.drone.target == None:
                 status = py_trees.common.Status.FAILURE
