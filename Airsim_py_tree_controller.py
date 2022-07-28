@@ -18,17 +18,20 @@ y: Sequence
 Am I moving to a waypoint
 """
 
+import functools
 from types import NoneType
 import airsim
 import os
 import py_trees
 import time
+from Behaviors.FlyToBBTargetAction import FlyToBBTargetAction
+from Behaviors.GetBBTarget import GetBBTarget
+from Blackboard.BlackboardManager import BlackboardManager
 
+class TakeoffAction(py_trees.behaviour.Behaviour):
 
-class zAxisAction(py_trees.behaviour.Behaviour):
-
-    def __init__(self, name="Hover", velocity=0, targetAltitude=5):
-        super(zAxisAction, self).__init__(name)
+    def __init__(self, name="Takeoff", velocity=0, targetAltitude=5):
+        super(TakeoffAction, self).__init__(name)
 
         self.name = name
         self.isComplete = False
@@ -39,6 +42,7 @@ class zAxisAction(py_trees.behaviour.Behaviour):
         self.velocity = velocity
 
     def initialise(self):
+        blackboard.drone.landed_state = False
         if self.isComplete == False:
             self.api_start_time = time.perf_counter()
             self.runningStatus = False
@@ -49,6 +53,8 @@ class zAxisAction(py_trees.behaviour.Behaviour):
         blackboard.drone.height = blackboard.client.getDistanceSensorData(distance_sensor_name="Height").distance
 
         print(blackboard.drone.height)
+
+
 
         if round(blackboard.drone.height) == self.target_altitude:# or self.isComplete == True:
                     
@@ -63,30 +69,8 @@ class zAxisAction(py_trees.behaviour.Behaviour):
         # Behavior has either not yet started or is currently running
         else:
             new_status = py_trees.common.Status.RUNNING
-            """# Check if the API call timed out
-            elapsed_time = (time.perf_counter() - self.api_start_time)
-            print("Elapsed Time: " + str(elapsed_time))
-            if elapsed_time >= self.duration:
-                new_status = py_trees.common.Status.FAILURE
-
-            else:"""
-
-            # If the behavior has not already been called, call it
-            #if self.runningStatus == False:
-            
-
-            # Provide the drone with an upwards velocity impulse, along z axis, for 3 seconds
+            # Provide the drone with an upwards velocity impulse, along z axis, for 1 seconds
             blackboard.client.moveByVelocityAsync(0, 0, self.velocity, 1)     
-            """if self.runningStatus == False:
-                print("Taking Off...")
-                blackboard.client.takeoffAsync()
-                self.runningStatus = True"""
-            # If the behavior is running, poll the drone's height sensor
-            # else:
-            #print("take off already started, polling height")
-             
-            
-
 
         return new_status
 
@@ -102,72 +86,224 @@ class HoverAction(py_trees.behaviour.Behaviour):
     def update(self):
       
         print("Landing...")
+
+        
         status = py_trees.common.Status.RUNNING
         blackboard.client.landAsync()
 
         return status
 
-class FlyTowardsAction(py_trees.behaviour.Behaviour):
-    def __init__(self, duration):
+class LandAction(py_trees.behaviour.Behaviour):
+    def __init__(self, velocity = 2):
+        super().__init__()
+        self.isComplete = False
+        self.velocity = velocity
+
+    def initialise(self):
+        print("landing initalising..")
+        if blackboard.drone.landed_state == True:
+            print("Already Landed!")
+            return py_trees.common.Status.FAILURE
+
+
+    def update(self):
+        blackboard.drone.height = blackboard.client.getDistanceSensorData(distance_sensor_name="Height").distance
+
+        print(round(blackboard.drone.height))
+
+        # Check if the behavior has completed
+        if round(blackboard.drone.height) == 0:
+            print("Landing Successful!")
+            blackboard.drone.landed_state = True  
+            return py_trees.common.Status.SUCCESS
+
+        # Behavior has either not yet started or is currently running
+        else:
+            print("Landing...")
+            new_status = py_trees.common.Status.RUNNING
+            # Provide the drone with an upwards velocity impulse, along z axis, for 1 seconds
+            blackboard.client.moveByVelocityAsync(0, 0, self.velocity, 1)     
+
+        return new_status
+
+        """
+        print("Landing...")
+        state = blackboard.client.getMultirotorState()
+        print(state.landed_state)
+
+        status = py_trees.common.Status.RUNNING
+        blackboard.client.landAsync()
+        """
+        return status
+
+"""class FlyTowardsAction(py_trees.behaviour.Behaviour):
+    def __init__(self, duration=None, waypoints=[]):
         super().__init__()
         self.api_start_time = time.perf_counter()
         self.duration = duration
         self.isComplete = False
+        self.waypoints = waypoints
+        self.waypoint_index = 0
+        self.target = None
 
     def initialise(self):
-        if self.isComplete == True:
-            return py_trees.common.Status.SUCCESS
+        if len(self.waypoints) > 0:
+            print("INITALIZSING FLY TO WAYPOINT TARGET")
+            if self.waypoint_index < len(self.waypoints):
+                self.target = self.waypoints[self.waypoint_index]
+                #self.waypoint_index += 1
+            else:
+                return py_trees.common.Status.SUCCESS
 
     def update(self):
         
-        elapsed_time = (time.perf_counter() - self.api_start_time)
-        if elapsed_time >= self.duration:
-            print("fly forward timelimit reached")
-            self.isComplete = True
-            return py_trees.common.Status.SUCCESS          
-         
-        print("Executing fly forward behavior...")
-        blackboard.client.moveByVelocityAsync(2, 0, 0, 1)     
+        #drone_pos = blackboard.client.getMultirotorState().getPosition()
+        drone_pos = blackboard.client.simGetVehiclePose().position
+        
 
-        return py_trees.common.Status.RUNNING
+        if self.duration is not None:
+            elapsed_time = (time.perf_counter() - self.api_start_time)
+            if elapsed_time >= self.duration:
+                print("fly forward timelimit reached")
+                self.isComplete = True
+                return py_trees.common.Status.FAILURE          
+        
+        if self.target != None:
+            print(round(self.target.x_val - drone_pos.x_val))
+            
+            if round(self.target.x_val - drone_pos.x_val) <= 1 and round(self.target.y_val - drone_pos.y_val) <= 1:
+                print("Destination arrived")
+                # check if there are any other destinations to visit
+                if len(self.waypoints) > 0:
+                    print("Checking for next waypoint..")
+                    if self.waypoint_index < len(self.waypoints):
+                        print("New Waypoint found!")
+                        self.target = self.waypoints[self.waypoint_index]
+                        self.waypoint_index += 1
+                        print("Executing fly towards target behavior...")
+                        blackboard.client.moveToPositionAsync(self.target.x_val, self.target.y_val, self.target.z_val, 2)
+                        return py_trees.common.Status.RUNNING
+ 
+                    else:
+                        print("No New Waypoint found, ENDING")
+                        self.isComplete = True
+                        return py_trees.common.Status.SUCCESS
+
+
+                
+                #return py_trees.common.Status.SUCCESS
+            else:
+                print("Executing fly towards target behavior...")
+                blackboard.client.moveToPositionAsync(self.target.x_val, self.target.y_val, self.target.z_val, 2)
+        else:
+            print("Executing fly forward behavior...")
+            blackboard.client.moveByVelocityAsync(2, 0, 0, 1)     
+
+        return py_trees.common.Status.RUNNING"""
 
 # Initalize and store Airsim client info
-blackboard = py_trees.blackboard.Client(name="Airsim")
-blackboard.register_key(key="client", access=py_trees.common.Access.WRITE)
-blackboard.register_key(key="client", access=py_trees.common.Access.READ)
+airsimBlackboardManager = BlackboardManager(name="Airsim")
+airsimBlackboardManager.registerKey(key="client")
+airsimBlackboardManager.registerKey(key="drone/height")
+airsimBlackboardManager.registerKey(key="drone/waypoints")
+airsimBlackboardManager.registerKey(key="drone/target")
+airsimBlackboardManager.registerKey(key="drone/API_timeout")
+airsimBlackboardManager.registerKey(key="drone/landed_state")
+#blackboard = py_trees.blackboard.Client(name="Airsim")
+#blackboard.register_key(key="client", access=py_trees.common.Access.WRITE)
+#blackboard.register_key(key="client", access=py_trees.common.Access.READ)
 
 # Initalize and store drone sensor info
-blackboard.register_key(key="drone/height", access=py_trees.common.Access.WRITE)
-blackboard.register_key(key="drone/height", access=py_trees.common.Access.READ)
+#blackboard.register_key(key="drone/height", access=py_trees.common.Access.WRITE)
+#blackboard.register_key(key="drone/height", access=py_trees.common.Access.READ)
 
 # All Airsim API movement calls MUST be provided a duration value
-blackboard.register_key(key="drone/API_timeout", access=py_trees.common.Access.WRITE)
-blackboard.register_key(key="drone/API_timeout", access=py_trees.common.Access.READ)
+#blackboard.register_key(key="drone/API_timeout", access=py_trees.common.Access.WRITE)
+#blackboard.register_key(key="drone/API_timeout", access=py_trees.common.Access.READ)
+
+# Initialize and store drone landed state
+#blackboard.register_key(key="drone/landed_state", access=py_trees.common.Access.WRITE)
+#blackboard.register_key(key="drone/landed_state", access=py_trees.common.Access.READ)
+
+# Create a serise of waypoints visiable in simulation
+waypoints = [airsim.Vector3r(10,5,0), airsim.Vector3r(-10,5,0)]
+
+blackboard = airsimBlackboardManager.getBlackboard()
 
 blackboard.client = airsim.MultirotorClient()
 blackboard.client.confirmConnection()
 blackboard.client.enableApiControl(True)
 blackboard.client.armDisarm(True)
 blackboard.drone.API_timeout = 10000   # Timeout any movement API calls after 10 seconds
+blackboard.drone.landed_state = True
+blackboard.drone.waypoints = waypoints
+blackboard.drone.target = None
 
 print(py_trees.display.unicode_blackboard())
 
-# Create behavior tree nodes and link the tree together
-root = py_trees.composites.Sequence("Sequence1")
-sequence = py_trees.composites.Sequence("Sequence2")
-takeoff = zAxisAction("Take Off", -2)
-flytowards = FlyTowardsAction(4)
-land = zAxisAction("Land", 2, 0)
-sequence.add_children([takeoff, flytowards])
-root.add_children([sequence, land])
+def post_tick_handler(snapshot_visitor, behaviour_tree):
+    print(
+        py_trees.display.unicode_tree(
+            behaviour_tree.root,
+            visited=snapshot_visitor.visited,
+            previously_visited=snapshot_visitor.visited
+        )
+    )
 
+
+blackboard.client.simPlotPoints(points=waypoints, size=50, is_persistent=True)
+
+# Create behavior tree nodes
+root = py_trees.composites.Sequence("Sequence1")
+flightSequence = py_trees.composites.Sequence("Flight Sequence")
+takeoff = TakeoffAction("Take Off", -2)
+#flytowards = FlyTowardsAction(10)
+#flytowards = FlyTowardsAction(target=airsim.Vector3r(10,0,0))
+
+waypointSequence = py_trees.composites.Sequence("Waypoint Sequence")
+
+# Queries for a target location, flys to it
+flyToBBTarget = FlyToBBTargetAction()
+getBBTarget = GetBBTarget(waypoints=blackboard.drone.waypoints)
+land = LandAction()
+
+# Get target will fail if there are no more targets available, this will
+anyTargets = py_trees.decorators.FailureIsSuccess(
+    name="Any Targets",
+    child=getBBTarget
+)
+
+flyWaypoints = py_trees.decorators.FailureIsRunning(
+    name="Fly Target",
+    child=flyToBBTarget
+)
+
+"""anyWaypoints = py_trees.decorators.FailureIsSuccess(
+    name="Fly to all Targets",
+    child=waypointSequence
+)"""
+#land = zAxisAction("Land", 2, 0)
+
+# Construct the BT by linking the created nodes
+flightSequence.add_children([takeoff, waypointSequence])
+waypointSequence.add_children([anyTargets, flyWaypoints])
+root.add_children([flightSequence, land])
 behavior_tree = py_trees.trees.BehaviourTree(root=root)
+
+snapshot_visitor = py_trees.visitors.SnapshotVisitor()
+behavior_tree.add_post_tick_handler(
+    functools.partial(post_tick_handler,
+                      snapshot_visitor))
+behavior_tree.visitors.append(snapshot_visitor)
+
 
 # Iterate the tree
 try:
-    for i in range(0, 25):
+    for i in range(0, 100):
+        #print(py_trees.display.ascii_tree(root))
         behavior_tree.tick()
         time.sleep(0.5)
     print("\n")
 except KeyboardInterrupt:
     pass
+

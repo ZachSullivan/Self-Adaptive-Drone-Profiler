@@ -22,6 +22,19 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Airsim_py_tree_controller.py" />
+    <Compile Include="Behaviors\GetBBTarget.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Behaviors\FlyToBBTargetAction.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Blackboard\BlackboardManager.py">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Behaviors\" />
+    <Folder Include="Blackboard\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
