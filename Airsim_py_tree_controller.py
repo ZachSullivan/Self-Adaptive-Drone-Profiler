@@ -28,6 +28,27 @@ from Behaviors.FlyToBBTargetsAction import FlyToBBTargetsAction
 from Behaviors.GetBBTarget import GetBBTarget
 from Blackboard.BlackboardManager import BlackboardManager
 
+class Power4r():
+    rotor_1 = 0.0
+    rotor_2 = 0.0
+    rotor_3 = 0.0
+    rotor_4 = 0.0
+
+    def __init__(self, rotor_1 = 0.0, rotor_2 = 0.0, rotor_3 = 0.0, rotor_4 = 0.0):
+        self.rotor_1 = rotor_1
+        self.rotor_2 = rotor_2
+        self.rotor_3 = rotor_3
+        self.rotor_4 = rotor_4
+
+    def add(self, rotor_1, rotor_2, rotor_3, rotor_4):
+        self.rotor_1 += rotor_1
+        self.rotor_2 += rotor_2
+        self.rotor_3 += rotor_3
+        self.rotor_4 += rotor_4
+
+    def __str__(self) -> str:
+        return str([self.rotor_1, self.rotor_2, self.rotor_3, self.rotor_4])
+
 class TakeoffAction(py_trees.behaviour.Behaviour):
 
     def __init__(self, name="Takeoff", velocity=0, targetAltitude=5):
@@ -200,6 +221,7 @@ airsimBlackboardManager.registerKey(key="drone/waypoints")
 airsimBlackboardManager.registerKey(key="drone/target")
 airsimBlackboardManager.registerKey(key="drone/API_timeout")
 airsimBlackboardManager.registerKey(key="drone/landed_state")
+airsimBlackboardManager.registerKey(key="drone/rotors/power")
 #blackboard = py_trees.blackboard.Client(name="Airsim")
 #blackboard.register_key(key="client", access=py_trees.common.Access.WRITE)
 #blackboard.register_key(key="client", access=py_trees.common.Access.READ)
@@ -234,6 +256,7 @@ blackboard.drone.API_timeout = 10000   # Timeout any movement API calls after 10
 blackboard.drone.landed_state = True
 blackboard.drone.waypoints = waypoints
 blackboard.drone.target = None
+blackboard.drone.rotors.power = Power4r(0, 0, 0, 0)
 
 print(py_trees.display.unicode_blackboard())
 
@@ -271,10 +294,69 @@ behavior_tree.add_post_tick_handler(
 behavior_tree.visitors.append(snapshot_visitor)
 
 
+
+def getPowerFromThrust(rotorPower:Power4r, time):
+    rotorStates = blackboard.client.getRotorStates()
+    multirotorStates = blackboard.client.getMultirotorState()
+
+    rotors = rotorStates.rotors
+    vel = multirotorStates.kinematics_estimated.linear_velocity.get_length()
+    acc = multirotorStates.kinematics_estimated.linear_acceleration.get_length()
+
+    power = {}
+    print(rotors)
+    print("Velocity: m/s " + str(vel))
+    print("acceleration: m/s^2 " + str(acc))
+    print("elapsed time: s " + str(time))
+
+    #distance = (vel*time) + (0.5*acc*time**2)
+
+    distance = (vel*time)
+
+    print("Distance travelled: m " + str(distance))
+    thrust = 0
+  
+    for index, rotor in enumerate(rotors):
+        thrust += rotor["thrust"]
+        #thrust = rotor["thrust"]
+        
+        # IDEA: need to sum the 4 thrust vectors to obtain a centroid thrust vector, THEN use the velocity and acceleration vectors as those are computed from the center of the drone
+
+        # Compute watts as an instanteous measurement
+        # Continuoyusly sum my computated watts in a given instance to produce a rate of work as Watt Hours (which is directly equivlent to joules, 1 watt second = 1 joule)
+        # Note a sum of all 4 thrust vectors produces a singular thrust vector from the center of the drone
+        
+        #power["rotor "+ str(index)] = (thrust * distance)/time
+        #power["rotor "+ str(index)] = (thrust * vel)
+
+    print("centroid thrust: N " + str(thrust))
+    #print("power is: " + str(power))
+
+    #rotorPower.add(power["rotor 0"], power["rotor 1"], power["rotor 2"], power["rotor 3"])
+    rotorPower = (thrust * vel)
+    #print(rotorPower)
+    #print("Drone power: W " + str(rotorPower))
+    return rotorPower
+   
+
+
+
+start_time = time.perf_counter()
+elapsed_time = 0
+dronePower = 0
+
 # Iterate the tree
 try:
-    for i in range(0, 100):
+    for i in range(0, 40):
         #print(py_trees.display.ascii_tree(root))
+
+        # Record elapsed mission time
+        elapsed_time = (time.perf_counter() - start_time)
+        
+        #print drone power
+        #getPowerFromThrust(blackboard.drone.rotors.power, elapsed_time)
+        dronePower += getPowerFromThrust(blackboard.drone.rotors.power, elapsed_time)
+        print("Drone power: W " + str(dronePower))
         behavior_tree.tick()
         time.sleep(0.5)
     print("\n")

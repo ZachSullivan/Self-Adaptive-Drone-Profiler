@@ -65,6 +65,8 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
             # Obtain the drone's current position
             drone_pos = self.blackboard.client.simGetVehiclePose().position
 
+
+
             # If a timeout was give, check if behavior has timed out
             if self.duration is not None:
                 elapsed_time = (time.perf_counter() - self.api_start_time)
