@@ -1,22 +1,3 @@
-"""
-V2
-fly forward
-check if I have reached a wall
-If a wall is approaching, stop
-rotate in increments of 5 degrees
-check if a wall is infront of me and blocking me
-fly forward and repeat
-
-V1
-Have I taken off?
-n: take off and hover
-y: Do I have a target waypoint to move to?
-n: Obtain nearest waypoint
-y: Sequence
-    1: Move to that waypoint
-    2
-Am I moving to a waypoint
-"""
 
 import functools
 from types import NoneType
@@ -24,8 +5,18 @@ import airsim
 import os
 import py_trees
 import time
+import numpy as np
+
+# export the energy model data in csv format
+import csv
+
+import Waypoint_visualization
+
 from Behaviors.FlyToBBTargetsAction import FlyToBBTargetsAction
 from Behaviors.GetBBTarget import GetBBTarget
+from Behaviors.TakeoffAction import TakeoffAction
+from Behaviors.LandAction import LandAction
+from Behaviors.SimEpochAction import SimEpochAction
 from Blackboard.BlackboardManager import BlackboardManager
 
 class Power4r():
@@ -49,201 +40,26 @@ class Power4r():
     def __str__(self) -> str:
         return str([self.rotor_1, self.rotor_2, self.rotor_3, self.rotor_4])
 
-class TakeoffAction(py_trees.behaviour.Behaviour):
-
-    def __init__(self, name="Takeoff", velocity=0, targetAltitude=5):
-        super(TakeoffAction, self).__init__(name)
-
-        self.name = name
-        self.isComplete = False
-        self.runningStatus = False
-        self.target_altitude = targetAltitude
-        self.duration = blackboard.drone.API_timeout
-        self.api_start_time = time.perf_counter()
-        self.velocity = velocity
-
-    def initialise(self):
-        blackboard.drone.landed_state = False
-        if self.isComplete == False:
-            self.api_start_time = time.perf_counter()
-            self.runningStatus = False
-            print(self.name + " initalising..")
-        
-    def update(self):
-
-        blackboard.drone.height = blackboard.client.getDistanceSensorData(distance_sensor_name="Height").distance
-
-        print(blackboard.drone.height)
-
-
-
-        if round(blackboard.drone.height) == self.target_altitude:# or self.isComplete == True:
-                    
-            new_status = py_trees.common.Status.SUCCESS
-            self.isComplete = True
-
-        # Check if the behavior has completed
-        if self.isComplete == True:
-            print(self.name + " Successfull")
-            new_status = py_trees.common.Status.SUCCESS
-        
-        # Behavior has either not yet started or is currently running
-        else:
-            new_status = py_trees.common.Status.RUNNING
-            # Provide the drone with an upwards velocity impulse, along z axis, for 1 seconds
-            blackboard.client.moveByVelocityAsync(0, 0, self.velocity, 1)     
-
-        return new_status
-
-class HoverAction(py_trees.behaviour.Behaviour):
-    def __init__(self):
-        super().__init__()
-        self.isComplete = False
-
-    def initialise(self):
-
-        print("landing initalising..")
-
-    def update(self):
-      
-        print("Landing...")
-
-        
-        status = py_trees.common.Status.RUNNING
-        blackboard.client.landAsync()
-
-        return status
-
-class LandAction(py_trees.behaviour.Behaviour):
-    def __init__(self, velocity = 2):
-        super().__init__()
-        self.isComplete = False
-        self.velocity = velocity
-
-    def initialise(self):
-        print("landing initalising..")
-        if blackboard.drone.landed_state == True:
-            print("Already Landed!")
-            return py_trees.common.Status.FAILURE
-
-
-    def update(self):
-        blackboard.drone.height = blackboard.client.getDistanceSensorData(distance_sensor_name="Height").distance
-
-        print(round(blackboard.drone.height))
-
-        # Check if the behavior has completed
-        if round(blackboard.drone.height) == 0:
-            print("Landing Successful!")
-            blackboard.drone.landed_state = True  
-            return py_trees.common.Status.SUCCESS
-
-        # Behavior has either not yet started or is currently running
-        else:
-            print("Landing...")
-            new_status = py_trees.common.Status.RUNNING
-            # Provide the drone with an upwards velocity impulse, along z axis, for 1 seconds
-            blackboard.client.moveByVelocityAsync(0, 0, self.velocity, 1)     
-
-        return new_status
-
-
-"""class FlyTowardsAction(py_trees.behaviour.Behaviour):
-    def __init__(self, duration=None, waypoints=[]):
-        super().__init__()
-        self.api_start_time = time.perf_counter()
-        self.duration = duration
-        self.isComplete = False
-        self.waypoints = waypoints
-        self.waypoint_index = 0
-        self.target = None
-
-    def initialise(self):
-        if len(self.waypoints) > 0:
-            print("INITALIZSING FLY TO WAYPOINT TARGET")
-            if self.waypoint_index < len(self.waypoints):
-                self.target = self.waypoints[self.waypoint_index]
-                #self.waypoint_index += 1
-            else:
-                return py_trees.common.Status.SUCCESS
-
-    def update(self):
-        
-        #drone_pos = blackboard.client.getMultirotorState().getPosition()
-        drone_pos = blackboard.client.simGetVehiclePose().position
-        
-
-        if self.duration is not None:
-            elapsed_time = (time.perf_counter() - self.api_start_time)
-            if elapsed_time >= self.duration:
-                print("fly forward timelimit reached")
-                self.isComplete = True
-                return py_trees.common.Status.FAILURE          
-        
-        if self.target != None:
-            print(round(self.target.x_val - drone_pos.x_val))
-            
-            if round(self.target.x_val - drone_pos.x_val) <= 1 and round(self.target.y_val - drone_pos.y_val) <= 1:
-                print("Destination arrived")
-                # check if there are any other destinations to visit
-                if len(self.waypoints) > 0:
-                    print("Checking for next waypoint..")
-                    if self.waypoint_index < len(self.waypoints):
-                        print("New Waypoint found!")
-                        self.target = self.waypoints[self.waypoint_index]
-                        self.waypoint_index += 1
-                        print("Executing fly towards target behavior...")
-                        blackboard.client.moveToPositionAsync(self.target.x_val, self.target.y_val, self.target.z_val, 2)
-                        return py_trees.common.Status.RUNNING
- 
-                    else:
-                        print("No New Waypoint found, ENDING")
-                        self.isComplete = True
-                        return py_trees.common.Status.SUCCESS
-
-
-                
-                #return py_trees.common.Status.SUCCESS
-            else:
-                print("Executing fly towards target behavior...")
-                blackboard.client.moveToPositionAsync(self.target.x_val, self.target.y_val, self.target.z_val, 2)
-        else:
-            print("Executing fly forward behavior...")
-            blackboard.client.moveByVelocityAsync(2, 0, 0, 1)     
-
-        return py_trees.common.Status.RUNNING"""
-
 # Initalize and store Airsim client info
 airsimBlackboardManager = BlackboardManager(name="Airsim")
 airsimBlackboardManager.registerKey(key="client")
+airsimBlackboardManager.registerKey(key="sim/epoch_count")
+airsimBlackboardManager.registerKey(key="sim/epoch_limit")
+airsimBlackboardManager.registerKey(key="sim/status")
 airsimBlackboardManager.registerKey(key="drone/height")
 airsimBlackboardManager.registerKey(key="drone/waypoints")
 airsimBlackboardManager.registerKey(key="drone/target")
 airsimBlackboardManager.registerKey(key="drone/API_timeout")
 airsimBlackboardManager.registerKey(key="drone/landed_state")
 airsimBlackboardManager.registerKey(key="drone/rotors/power")
-#blackboard = py_trees.blackboard.Client(name="Airsim")
-#blackboard.register_key(key="client", access=py_trees.common.Access.WRITE)
-#blackboard.register_key(key="client", access=py_trees.common.Access.READ)
-
-# Initalize and store drone sensor info
-#blackboard.register_key(key="drone/height", access=py_trees.common.Access.WRITE)
-#blackboard.register_key(key="drone/height", access=py_trees.common.Access.READ)
-
-# All Airsim API movement calls MUST be provided a duration value
-#blackboard.register_key(key="drone/API_timeout", access=py_trees.common.Access.WRITE)
-#blackboard.register_key(key="drone/API_timeout", access=py_trees.common.Access.READ)
-
-# Initialize and store drone landed state
-#blackboard.register_key(key="drone/landed_state", access=py_trees.common.Access.WRITE)
-#blackboard.register_key(key="drone/landed_state", access=py_trees.common.Access.READ)
 
 # Create a serise of waypoints visiable in simulation
 waypoints = [
+    airsim.Vector3r(0,0,-5), 
     airsim.Vector3r(10,0,-5), 
-    airsim.Vector3r(-10,0,-5),
-    airsim.Vector3r(-10,-10,-5),
-    airsim.Vector3r(10,-10,-5),
+    #airsim.Vector3r(-10,0,-5),
+    #airsim.Vector3r(-10,-10,-5),
+    #airsim.Vector3r(10,-10,-5),
 ]
 
 blackboard = airsimBlackboardManager.getBlackboard()
@@ -252,6 +68,9 @@ blackboard.client = airsim.MultirotorClient()
 blackboard.client.confirmConnection()
 blackboard.client.enableApiControl(True)
 blackboard.client.armDisarm(True)
+blackboard.sim.epoch_count = 0  
+blackboard.sim.epoch_limit = 1  # the maximum number of simuation epochs that can be run. new epoch is recorded after each drone reset
+blackboard.sim.status = py_trees.common.Status.INVALID
 blackboard.drone.API_timeout = 10000   # Timeout any movement API calls after 10 seconds
 blackboard.drone.landed_state = True
 blackboard.drone.waypoints = waypoints
@@ -260,6 +79,7 @@ blackboard.drone.rotors.power = Power4r(0, 0, 0, 0)
 
 print(py_trees.display.unicode_blackboard())
 
+# Debug function to visualize BT in console
 def post_tick_handler(snapshot_visitor, behaviour_tree):
     print(
         py_trees.display.unicode_tree(
@@ -274,92 +94,239 @@ blackboard.client.simPlotPoints(points=waypoints, size=25, is_persistent=True)
 
 # Create behavior tree nodes
 root = py_trees.composites.Sequence("Sequence1")
-flightSequence = py_trees.composites.Sequence("Flight Sequence")
-takeoff = TakeoffAction("Take Off", -2)
+flightSequence = py_trees.composites.Sequence("Flight Sequence") # Consists of takeoff and fly to waypoint
+takeoff = TakeoffAction("Take Off", velocity=-4, targetAltitude=5)
+#takeoff = TakeoffAction("Take Off")
 
 # Queries for a target location, flys to it
 flyToBBTargets = FlyToBBTargetsAction(waypoints=blackboard.drone.waypoints)
-land = LandAction()
+
+landSequence = py_trees.composites.Sequence("Land Sequence") # Consists of land, and check for sim end behavior
+land = LandAction(8)
+updateSimEpoch = SimEpochAction()
 
 
 # Construct the BT by linking the created nodes
 flightSequence.add_children([takeoff, flyToBBTargets])
-root.add_children([flightSequence, land])
+landSequence.add_children([land, updateSimEpoch])
+root.add_children([flightSequence, landSequence])
 behavior_tree = py_trees.trees.BehaviourTree(root=root)
 
+
+# Debug to visualize BT in console
 snapshot_visitor = py_trees.visitors.SnapshotVisitor()
 behavior_tree.add_post_tick_handler(
     functools.partial(post_tick_handler,
                       snapshot_visitor))
 behavior_tree.visitors.append(snapshot_visitor)
 
+# Returns a list of each thrust generated from the four rotors
+def getThrusts():
+    thrusts = []
+    rotors = blackboard.client.getRotorStates().rotors
+    for rotor in rotors:
+        thrusts.append(rotor["thrust"])
+    return thrusts
 
+def getCentroidThrust():
+    rotorStates = blackboard.client.getRotorStates()
+    rotors = rotorStates.rotors
+    #rotors = getRotors()
+    return sum(rotor["thrust"] for rotor in rotors)
 
-def getPowerFromThrust(rotorPower:Power4r, time):
+# Compute a energy cost from thrust
+def getPowerFromThrust():
     rotorStates = blackboard.client.getRotorStates()
     multirotorStates = blackboard.client.getMultirotorState()
 
     rotors = rotorStates.rotors
-    vel = multirotorStates.kinematics_estimated.linear_velocity.get_length()
-    acc = multirotorStates.kinematics_estimated.linear_acceleration.get_length()
+    vel_i = multirotorStates.kinematics_estimated.linear_velocity.get_length()
+    #acc = multirotorStates.kinematics_estimated.linear_acceleration.get_length()
 
-    power = {}
-    print(rotors)
-    print("Velocity: m/s " + str(vel))
-    print("acceleration: m/s^2 " + str(acc))
-    print("elapsed time: s " + str(time))
+    #print(rotors)
+    #print("instant Velocity: m/s " + str(vel_i))
+    #print("acceleration: m/s^2 " + str(acc))
+    #print("elapsed time: s " + str(time))
 
-    #distance = (vel*time) + (0.5*acc*time**2)
+    #distance = (vel*time)
 
-    distance = (vel*time)
-
-    print("Distance travelled: m " + str(distance))
+    #print("Distance travelled: m " + str(distance))
     thrust = 0
   
-    for index, rotor in enumerate(rotors):
+    for rotor in rotors:
         thrust += rotor["thrust"]
-        #thrust = rotor["thrust"]
-        
         # IDEA: need to sum the 4 thrust vectors to obtain a centroid thrust vector, THEN use the velocity and acceleration vectors as those are computed from the center of the drone
 
         # Compute watts as an instanteous measurement
         # Continuoyusly sum my computated watts in a given instance to produce a rate of work as Watt Hours (which is directly equivlent to joules, 1 watt second = 1 joule)
         # Note a sum of all 4 thrust vectors produces a singular thrust vector from the center of the drone
-        
-        #power["rotor "+ str(index)] = (thrust * distance)/time
-        #power["rotor "+ str(index)] = (thrust * vel)
 
-    print("centroid thrust: N " + str(thrust))
-    #print("power is: " + str(power))
+    #print("centroid thrust: N " + str(thrust))
 
-    #rotorPower.add(power["rotor 0"], power["rotor 1"], power["rotor 2"], power["rotor 3"])
-    rotorPower = (thrust * vel)
-    #print(rotorPower)
-    #print("Drone power: W " + str(rotorPower))
+    rotorPower = (thrust * vel_i)
+
     return rotorPower
-   
 
-
-
+# Total distance is the sum of distances i through n, with with integral distances computed halfway between vi and vi_star
+def computeDistance(vi, t):
+    return (vi*t)
+ 
 start_time = time.perf_counter()
 elapsed_time = 0
 dronePower = 0
 
+distances = []
+distance_i = [] # Stores the instant distance computed at each BT tick
+power_i = []
+centroid_thrusts = []
+four_thrusts = [] # multidimisional list of each thrust from the 4 rotors
+times = []
+vel_i = []
+
 # Iterate the tree
 try:
-    for i in range(0, 40):
-        #print(py_trees.display.ascii_tree(root))
 
+    while True:
+    #while blackboard.client.sim_epochs < 2:
+    #for i in range(0, 40):
         # Record elapsed mission time
-        elapsed_time = (time.perf_counter() - start_time)
+        """
+        # This should be a Conditional node and a behavior in the BT...
+        # Check If the drone has landed
+        if blackboard.drone.landed_state == True:
+            print("RESETING DRONE")
+            # Get the present pose of the drone
+            pose = blackboard.client.simGetVehiclePose()
+            blackboard.client.sim_epochs += 1
+            # reset the drone back to its starting location
+            pose.position = airsim.Vector3r(0, 0, 0)
+            blackboard.client.simSetVehiclePose(pose, True)
+            
+            if blackboard.client.sim_epoch_count > blackboard.client.sim_epoch_limit:
+                break
+            # Reset the start time
+            #start_time = time.perf_counter()
+            #blackboard.drone.landed_state = False
+        """
+
+        if blackboard.sim.status == py_trees.common.Status.SUCCESS:
+            break
+
+        #times.append(round(elapsed_time))
+        power = getPowerFromThrust()
+        power_i.append(power)
+
+        vel = blackboard.client.getMultirotorState().kinematics_estimated.linear_velocity.get_length()
+        lv = blackboard.client.getMultirotorState().kinematics_estimated.linear_velocity.get_length()
+        vel_i.append(vel)
         
-        #print drone power
-        #getPowerFromThrust(blackboard.drone.rotors.power, elapsed_time)
-        dronePower += getPowerFromThrust(blackboard.drone.rotors.power, elapsed_time)
-        print("Drone power: W " + str(dronePower))
+        # This assumes constant velocity which is NOT the case
+        # distanceZ.append((vel_z*elapsed_time))
+
+        centroid_thrusts.append(getCentroidThrust())
+        four_thrusts.append(getThrusts())
+
+        distance_i.append((vel*elapsed_time))
+
+        # NOTE: This BT is ticking at 500ms, therefore the rate of power computed is not once every second, its once every millisecond
+        #dronePower += getPowerFromThrust(blackboard.drone.rotors.power, elapsed_time)
+        #dronePower += power
+
+
+        # At every BT tick, lets record the drone velocity, and instantaneous power consumed
+        #print("Drone power: W " + str(dronePower))
+
         behavior_tree.tick()
         time.sleep(0.5)
     print("\n")
+
+    elapsed_time = time.perf_counter() - start_time
+    total_distance = np.trapz(vel_i, dx=0.5)
+
+    # Elapsed time is measured in seconds, but BT ticks every 500ms
+    et_ms = int(elapsed_time)*1000
+
+    # Create a list of time intervals, stepping every 500ms
+    # Python range is not upperbounds inclusive, so we need to increase max value by increment amount so range IS upper inclusive
+    time_intervals = list(range(0, et_ms, 500))
+
+    #distances = list(range(0, int(total_distance)))
+    distances = list(range(0, int(total_distance)))
+
+    # Since power is measured at 500ms we need to double the time taken. 
+    #time_intervals = list(range(0, (int(elapsed_time)*2)-1))
+    print("TIME INTERVALS:")
+    print(time_intervals)
+
+    print("VELOCITIES:")
+    print(vel_i)
+
+    print("POWERI\n")
+    print(power_i)
+
+    print("Centroid Thrusts:")
+    print(centroid_thrusts)
+
+    print("Four Thrusts:")
+    print(four_thrusts)
+
+    #power_i = power_i[:len(distances)]
+
+
+
+    f = open("\Masters Thesis Code\Airsim py_tree controller\distance_power_data.csv", "w")
+    writer = csv.writer(f)
+    writer.writerows(zip(distances, power_i[:len(distances)]))
+    writer.writerows(zip(distances, power_i))
+    f.close()
+
+    dist_pwr_visual = Waypoint_visualization.Waypoint_visualization(distances, power_i[:len(distances)])
+    #dist_pwr_visual = Waypoint_visualization.Waypoint_visualization(distances, power_i)
+    dist_pwr_visual.visualize(
+        title="Instantaneous Power (W) with Respect to Total Distance (m) Travelled",
+        xlabel="Distance (m)",
+        ylabel="Power (W)"
+    )
+
+    veli_pwr_visual = Waypoint_visualization.Waypoint_visualization(vel_i, power_i)
+    veli_pwr_visual.visualize(
+        title="Instantaneous Power (W) with Respect to Instant Velocity (m/s)",
+        xlabel="Velocity (m/s)",
+        ylabel="Power (W)"
+    )
+
+    cthrust_pwr_visual = Waypoint_visualization.Waypoint_visualization(time_intervals, centroid_thrusts)
+    cthrust_pwr_visual.visualize(
+        title="Centroid Thrust (N) with Respect to Time (ms)",
+        xlabel="Time (ms)",
+        ylabel="Centroid Thrust (N)"
+    )
+
+    """four_thrust_pwr_visual = Waypoint_visualization.Waypoint_visualization(four_thrusts, power_i)
+    four_thrust_pwr_visual.multiDimensionalVisualize(
+        title="Instantaneous Power (W) with Respect to Four Rotor Thrusts (N)",
+        xlabel="Rotor Thrust (N)",
+        ylabel="Power (W)",
+        colors=["red", "green", "blue", "yellow"],
+        labels=["rotor 1", "rotor 2", "rotor 3", "rotor 4"]
+    )"""
+
+    # Need to produce a plot of instant power over its corresponding point in time, followed by a summation of Ipower over Ttime
+
+    f = open("\Masters Thesis Code\Airsim py_tree controller\power_time_data.csv", "w")
+    writer = csv.writer(f)
+    writer.writerows(zip(time_intervals, power_i))
+    f.close()
+
+    pwr_time_visual = Waypoint_visualization.Waypoint_visualization(time_intervals, power_i)
+    pwr_time_visual.visualize(
+        title="Instantaneous Power (W) with Respect to Time (ms)",
+        xlabel="Time (ms)",
+        ylabel="Power (W)"
+    )
+
 except KeyboardInterrupt:
+
+
     pass
 

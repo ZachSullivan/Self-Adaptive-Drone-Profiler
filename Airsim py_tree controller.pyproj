@@ -22,6 +22,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Airsim_py_tree_controller.py" />
+    <Compile Include="Behaviors\SimEpochAction.py" />
+    <Compile Include="GeneticAlgorithm.py" />
+    <Compile Include="Behaviors\LandAction.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Behaviors\TakeoffAction.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Behaviors\GetBBTarget.py">
       <SubType>Code</SubType>
     </Compile>

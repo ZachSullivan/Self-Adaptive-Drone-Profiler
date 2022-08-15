@@ -29,6 +29,11 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
             access=py_trees.common.Access.READ
         )
     
+    def initialise(self):
+        print("Initalizing waypoint behavior...")
+        self.index = 0
+        self.blackboard.drone.target = None
+
     def _get_target(self):
         target = None
         if self.waypoints == None:
@@ -64,8 +69,6 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
 
             # Obtain the drone's current position
             drone_pos = self.blackboard.client.simGetVehiclePose().position
-
-
 
             # If a timeout was give, check if behavior has timed out
             if self.duration is not None:
