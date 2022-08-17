@@ -3,10 +3,11 @@ import py_trees
 import time
 
 class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
-    def __init__(self, waypoints, duration=None):
+    def __init__(self, waypoints, duration=None, velocity=2):
         super().__init__()
         self.api_start_time = time.perf_counter()
         self.duration = duration
+        self.velocity = velocity
         self.waypoints = waypoints
         self.index=0
         self.blackboard = self.attach_blackboard_client("Airsim")
@@ -56,7 +57,7 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
                 print("Found a target!")
                 target = self.blackboard.drone.target
 
-                self.blackboard.client.moveToPositionAsync(target.x_val, target.y_val, target.z_val, 2) 
+                self.blackboard.client.moveToPositionAsync(target.x_val, target.y_val, target.z_val, self.velocity) 
                 status = py_trees.common.Status.RUNNING
         else:
             status = py_trees.common.Status.RUNNING
@@ -80,7 +81,7 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
         
 
             print("Executing fly towards target behavior...")
-            self.blackboard.client.moveToPositionAsync(target.x_val, target.y_val, target.z_val, 2)  
+            self.blackboard.client.moveToPositionAsync(target.x_val, target.y_val, target.z_val, self.velocity)  
             # If the blackboard does not have a target, fail the behavior
 
             print(abs(round(target.x_val - drone_pos.x_val)))

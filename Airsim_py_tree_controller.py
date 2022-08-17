@@ -96,10 +96,9 @@ blackboard.client.simPlotPoints(points=waypoints, size=25, is_persistent=True)
 root = py_trees.composites.Sequence("Sequence1")
 flightSequence = py_trees.composites.Sequence("Flight Sequence") # Consists of takeoff and fly to waypoint
 takeoff = TakeoffAction("Take Off", velocity=-4, targetAltitude=5)
-#takeoff = TakeoffAction("Take Off")
 
 # Queries for a target location, flys to it
-flyToBBTargets = FlyToBBTargetsAction(waypoints=blackboard.drone.waypoints)
+flyToBBTargets = FlyToBBTargetsAction(waypoints=blackboard.drone.waypoints, velocity=2)
 
 landSequence = py_trees.composites.Sequence("Land Sequence") # Consists of land, and check for sim end behavior
 land = LandAction(8)
@@ -277,7 +276,6 @@ try:
     f = open("\Masters Thesis Code\Airsim py_tree controller\distance_power_data.csv", "w")
     writer = csv.writer(f)
     writer.writerows(zip(distances, power_i[:len(distances)]))
-    writer.writerows(zip(distances, power_i))
     f.close()
 
     dist_pwr_visual = Waypoint_visualization.Waypoint_visualization(distances, power_i[:len(distances)])

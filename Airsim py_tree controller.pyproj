@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>062c81c9-cbd6-4f60-a469-0188656d60dd</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>Airsim_py_tree_controller.py</StartupFile>
+    <StartupFile>GeneticAlgorithm.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -23,6 +23,7 @@
   <ItemGroup>
     <Compile Include="Airsim_py_tree_controller.py" />
     <Compile Include="Behaviors\SimEpochAction.py" />
+    <Compile Include="DroneController.py" />
     <Compile Include="GeneticAlgorithm.py" />
     <Compile Include="Behaviors\LandAction.py">
       <SubType>Code</SubType>

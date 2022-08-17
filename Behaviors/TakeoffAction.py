@@ -87,6 +87,8 @@ class TakeoffAction(py_trees.behaviour.Behaviour):
         
         # Behavior has either not yet started or is currently running
         else:
+            print("TAKING OFF")
+            print("TAKE OFF VELOCITY IS: " + str(self.velocity))
             new_status = py_trees.common.Status.RUNNING
             # Provide the drone with an upwards velocity impulse, along z axis, for 1 seconds
             self.blackboard.client.moveByVelocityAsync(0, 0, self.velocity, 0.5)     
