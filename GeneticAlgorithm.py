@@ -49,6 +49,40 @@ class GeneticAlgorithm():
     def set_pop(self, pop):
         self.__pop = pop
 
+    # Tournament Selection Algorithm
+    # Take k number of individuals from the population, compete against each other. 
+    # k is our selection pressure and directly correlates to rate of convergence, Higher k = higher rate of convergence 
+    # Winner from k individuals is returned as the selected individual from the tournament.
+    # Repeat for all individuals in the population have competed
+    # k cannot be larger than the pop size
+    # Takes scored individuals a list of tuples 
+    # Returns winners and their scores as a list of tuples
+    def __tournament_selection(self, k, scores=[]):
+        
+        if k > self.pop_n:
+            raise Exception("Selection pressure K is larger than pop size")
+
+        # Copy the population into a list of tournament contenders
+        contenders = scores
+        
+        # List of active competitors in the tournament.
+        warriors = []
+        for i in range(k):
+            # Randomly select an individual from the list of contenders
+            # .. add them to the list of warriors, Pop the selected from the list of contenders
+            warriors.append(contenders.pop(randint(0, len(contenders)-1)))
+        
+        # Pit the warriors against each other
+        highest_fitness = None
+        for w in warriors:
+            # Selecting those with the LOWEST score
+            # TODO: This assumes SCORE and FITNESS are the same.. perhaps not.. 
+
+            # IDEA: instead of scoring ALL individuals and THEN selecting, instead select, then score, then return winner...
+            # .. everytime I compute a score, save it in a lookup table that matches bitstring to score. saving compuation
+            if highest_fitness is None or w[1] < highest_fitness[1]:
+                highest_fitness = w
+        return highest_fitness
     # Takes population size as argument, returns a list of that number of randomzied individuals 
     # When randomizing the population, need to make sure that no two individuals are the same
     # Note self is required for accessing private functions in the same class
@@ -75,8 +109,7 @@ class GeneticAlgorithm():
     # Loop that continually iterates for a given number of epochs (default 10), then ends the GA
     def update(self, epochs=1):
         for e in range(epochs):
-            scores = []
-
+            scores = [] # list of Tuples, where each tuple contains the individual and its score
             # 2.1 Generate scores for each indiviual in the population of params
             for bit_string in self.__pop:
 
@@ -89,12 +122,17 @@ class GeneticAlgorithm():
                 # At the moment a score is the sum of its consumed energy and time taken
                 # TODO: explore alternative scoring equations
                 score = (drone.get_total_energy() + drone.get_mission_time())
-                scores.append(score)
+                scores.append((bit_string, score))
             
-            print(scores)
-                
+            print("Scores: " + str(scores))
+               
             # 2.2 select which scored individuals within the current popualation should be repopulated.
+            winner = self.__tournament_selection(k=2, scores=scores)
+
+            print("Tournament Winner: " + str(winner))
             # 2.3 Produce offspring from the selected individuals by crossing over
+
+
             # 2.4 Select with a given probability a selection of offspring and mutate
 
 
