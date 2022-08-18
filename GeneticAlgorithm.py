@@ -83,12 +83,12 @@ class GeneticAlgorithm():
                 params = self.__bitstring_to_list(bit_string)
 
                 print(params)
-                drone = DroneController(takeoff_vel=params[0], flight_vel=params[1])
+                drone = DroneController(takeoff_vel=params[0], flight_vel=params[1], epochs=1)
                 drone.update()
 
                 # At the moment a score is the sum of its consumed energy and time taken
                 # TODO: explore alternative scoring equations
-                score = sum(drone.get_total_energy, drone.get_mission_time)
+                score = (drone.get_total_energy() + drone.get_mission_time())
                 scores.append(score)
             
             print(scores)

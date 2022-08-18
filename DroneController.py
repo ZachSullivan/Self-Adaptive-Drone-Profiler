@@ -6,12 +6,13 @@ import time
 from Behaviors.FlyToBBTargetsAction import FlyToBBTargetsAction
 from Behaviors.TakeoffAction import TakeoffAction
 from Behaviors.LandAction import LandAction
+from Behaviors.SimEpochAction import SimEpochAction
 from Blackboard.BlackboardManager import BlackboardManager
 
 
 class DroneController():
     
-    def __init__(self, takeoff_vel, flight_vel, tick_rate=0.5) -> None:
+    def __init__(self, takeoff_vel, flight_vel, tick_rate=0.5, epochs=1) -> None:
         
         # Take off and flight behaviors must have set desired velocities
         self.takeoff_vel = takeoff_vel
@@ -26,6 +27,10 @@ class DroneController():
         # Total mission time in seconds
         self.__mission_time = 0
 
+        # Informs the BT update cycle when to terminate the BT loop
+        # Value modified within the BT
+        self.terminate_bt = False 
+
         # Create a new blackboard through the blackboard manager
         # Manager is tasked with creating/returning blackboards, registering new keys within that blackboard
         self.blackboard_manager = BlackboardManager(name="Airsim")
@@ -36,7 +41,9 @@ class DroneController():
         self.blackboard_manager.registerKey(key="drone/waypoints") # defaults with read/write access
         self.blackboard_manager.registerKey(key="drone/height") # defaults with read/write access
         self.blackboard_manager.registerKey(key="drone/landed_state") # defaults with read/write access
-        self.blackboard_manager.registerKey(key="terminate_bt")
+        self.blackboard_manager.registerKey(key="sim/epoch_count")
+        self.blackboard_manager.registerKey(key="sim/epoch_limit")
+        self.blackboard_manager.registerKey(key="sim/status")
 
         # Initalize connection to the Airim UE server
         # NOTE: the UE Blocks environment MUST be running before executing this drone controller.
@@ -44,9 +51,10 @@ class DroneController():
         self.blackboard.client.confirmConnection()
         self.blackboard.client.enableApiControl(True)
         self.blackboard.client.armDisarm(True)
-        # Informs the BT update cycle when to terminate the BT loop
-        # Value modified within the BT
-        self.blackboard.terminate_bt = False
+
+        self.blackboard.sim.epoch_limit = epochs
+        self.blackboard.sim.epoch_count = 0
+        self.blackboard.sim.status = py_trees.common.Status.INVALID
 
         self.blackboard.drone.height = 0
         self.blackboard.drone.landed_state = True
@@ -81,12 +89,13 @@ class DroneController():
         takeoff = TakeoffAction("Take Off", velocity=(self.takeoff_vel*-1), targetAltitude=5)
         fly_to_target = FlyToBBTargetsAction(waypoints=self.blackboard.drone.waypoints, velocity=self.flight_vel)
         land = LandAction()
+        check_termination = SimEpochAction()
 
         # TODO: need to add a behavior that terminates BT
 
         # Construct the BT by linking the created nodes and sequences
         flight_sequence.add_children([takeoff, fly_to_target])
-        land_sequence.add_children([land]) # TODO: need to append termination behavior node
+        land_sequence.add_children([land, check_termination])
         root.add_children([flight_sequence, land_sequence])
 
         # Establish the root of the BT
@@ -142,7 +151,8 @@ class DroneController():
         energy_measurements = []
 
         # Repeatedly tick the BT until termination call at a default rate of 500ms
-        while self.blackboard.terminate_bt == False:
+        while self.terminate_bt == False:
+
             bt.tick()
 
             energy_measurements.append(
@@ -152,6 +162,9 @@ class DroneController():
                 )
             )
             
+            if self.blackboard.sim.status == py_trees.common.Status.SUCCESS:
+                self.terminate_bt = True
+
             time.sleep(self.tick_rate)
         
         elapsed_time = time.perf_counter() - start_time
