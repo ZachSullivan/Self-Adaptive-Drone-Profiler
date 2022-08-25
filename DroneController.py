@@ -12,11 +12,14 @@ from Blackboard.BlackboardManager import BlackboardManager
 
 class DroneController():
     
-    def __init__(self, takeoff_vel, flight_vel, tick_rate=0.5, epochs=1) -> None:
+    def __init__(self, takeoff_vel, flight_vel, tick_rate=0.5, epochs=1, timeout=300) -> None:
         
         # Take off and flight behaviors must have set desired velocities
         self.takeoff_vel = takeoff_vel
         self.flight_vel = flight_vel
+
+        # Amount of time before the BT terminates 
+        self.timeout = timeout
 
         # Rate at which the BT should repeatedly tick, units in seconds
         self.tick_rate = tick_rate
@@ -105,6 +108,7 @@ class DroneController():
         behavior_tree.add_post_tick_handler(
             functools.partial(self.__post_tick_handler,
                               snapshot_visitor))
+        
         behavior_tree.visitors.append(snapshot_visitor)
 
         return behavior_tree
@@ -152,7 +156,7 @@ class DroneController():
 
         # Repeatedly tick the BT until termination call at a default rate of 500ms
         while self.terminate_bt == False:
-
+            elapsed_time = time.perf_counter() - start_time
             bt.tick()
 
             energy_measurements.append(
@@ -162,11 +166,11 @@ class DroneController():
                 )
             )
             
-            if self.blackboard.sim.status == py_trees.common.Status.SUCCESS:
+            if self.blackboard.sim.status == py_trees.common.Status.SUCCESS or elapsed_time > start_time + self.timeout:
                 self.terminate_bt = True
 
             time.sleep(self.tick_rate)
         
-        elapsed_time = time.perf_counter() - start_time
+        #elapsed_time = time.perf_counter() - start_time
         self.__set_mission_time(elapsed_time)
         self.__set_total_energy(sum(energy_measurements))
