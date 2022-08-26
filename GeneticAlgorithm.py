@@ -25,11 +25,14 @@ class GeneticAlgorithm():
     V1: GA is optimizing the take off and waypoint flight velocities with respect to minizing energy consumed during mission AND minimizing mission flight time
     """
 
-    def __init__(self, pop_n=100, mu=0.03, min_vel=1,max_vel=10) -> None:
+    def __init__(self, pop_n=100, mu=0.03, cross_frac=0.8, select_pres=10, min_vel=1,max_vel=10) -> None:
     
         self.pop_n = pop_n
-        self.__pop = []
+        self.__pop = [] # List of populations
+        self.__generations = {}
         self.__mu = mu # Probability for a bit to mutate
+        self.__cross_frac = cross_frac # fraction of the current population to crossover and continue to next generation
+        self.__k = select_pres # Defines the tournament size, k=1 means random selection, larger k reduces the likelyhood of poor inidviuals selected as tourn winners
         self.__score_table = dict() # Lookup table that records bistrings as keys and their simulated score as value
         self.__max_vel = max_vel # maximum velocity which the GA can use to initialize an individual param
         self.__min_vel = min_vel  # Minimum velocity for GA initalize 
@@ -78,7 +81,8 @@ class GeneticAlgorithm():
         for child in children:
             self.__pop.append(child)
 
-    def set_pop(self, pop):
+    # Takes a list of individuals and stores in a list of populations
+    def set_pop(self, pop=[]):
         self.__pop = pop
 
     # Tournament Selection Algorithm
@@ -98,6 +102,7 @@ class GeneticAlgorithm():
 
         best_score = None
         best_individual = None
+
         for i in range(k):
             #selected = scores[randint(0, self.pop_n-1)]
             rnd_idx = randint(0, len(self.__pop)-1)
@@ -138,6 +143,7 @@ class GeneticAlgorithm():
         # TODO: explore alternative scoring equations
         return (drone.get_total_energy() + drone.get_mission_time())
 
+    # Single point crossover between two parents, producing two possible combinations of children
     def __crossover(self, parent1, parent2):
         
         cross_point = randint(0, len(parent1)-1)
@@ -195,26 +201,40 @@ class GeneticAlgorithm():
     # Loop that continually iterates for a given number of epochs (default 10), then ends the GA
     def update(self, epochs=1):
         for e in range(epochs):
-            # 2.1 select which individuals within the current popualation should be repopulated.
-            # If the selected has not been scored, simuate in airsim and score
-            parent1 = self.__tournament_selection(k=self.pop_n-1)
-            parent2 = self.__tournament_selection(k=self.pop_n-1)
-            print("POP: " + str(self.__pop))
-            print("Tournament Winners: " + str(parent1) + " and: " + str(parent2))
+            # Start a new record of pops generation
+            pop = []
+            #last_gen = self.__pop[-1]
 
-            # 2.2 Produce offspring from the selected individuals through single point crossover
-            # Select a crossover point in the bitstring, as a random value between index 0 and len of bitstring - 1
-            # TODO: package this crossover as a function
+            # 2.1 perform crossover for a given crossover fraction
+            crossover_size = round(self.__cross_frac * len(self.__pop))
+            for i in range(0, crossover_size-1):
+                # 2.1 select which individuals within the current popualation should be repopulated.
+                # If the selected has not been scored, simuate in airsim and score
+                parent1 = self.__tournament_selection(k=self.__k)
+                parent2 = self.__tournament_selection(k=self.__k)
+                print("POP: " + str(self.__pop))
+                print("Tournament Winners: " + str(parent1) + " and: " + str(parent2))
 
-            children = self.__crossover(parent1, parent2)
-            self.__insert_offspring(children)
+                # 2.2 Produce offspring from the selected individuals through single point crossover
+                # Select a crossover point in the bitstring, as a random value between index 0 and len of bitstring - 1
+                # TODO: package this crossover as a function
+                pop.append(parent1)
+                pop.append(parent2)
+
+                children = self.__crossover(parent1, parent2)
+                for child in children:
+                    pop.append(child)
+
+            self.__generations[("gen"+str(e))] = self.__pop
+            self.set_pop(pop)
+        print("Generations: " + str(self.__generations))
 
             # 2.3 Select with a given probability a selection of offspring and mutate
             # NOTE: too high of a mutation probability will devolve the GA into a random search
             # 2.3.1 Randomly select via index child(0, N-1), with given mutation prob flip the selected bit
             # Each given bit in the childs bit string has a mu probability to mutate
 
-ga = GeneticAlgorithm(10, 0.03, 1, 10)
+ga = GeneticAlgorithm(3, 0.03, 0.8, 2, 1, 10)
 
 # 1. Start by computing an inital population. This would presumably be a population of randomized arguments for each behavior in the BT.
 ga_population = ga.init_pop()
