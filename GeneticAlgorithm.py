@@ -1,9 +1,12 @@
 
-from operator import contains
 import random
+from operator import contains
 from random import randint
+
 import numpy as np
+
 from DroneController import DroneController
+
 
 class GeneticAlgorithm():
    
@@ -25,6 +28,11 @@ class GeneticAlgorithm():
     V1: GA is optimizing the take off and waypoint flight velocities with respect to minizing energy consumed during mission AND minimizing mission flight time
     """
 
+    def __init__(self) -> None:
+        self.pop_n = 5
+        self.pop = []
+        
+
     def __init__(self, pop_n=100, mu=0.03, cross_frac=0.8, select_pres=10, min_vel=1,max_vel=10) -> None:
     
         self.pop_n = pop_n
@@ -33,7 +41,9 @@ class GeneticAlgorithm():
         self.__mu = mu # Probability for a bit to mutate
         self.__cross_frac = cross_frac # fraction of the current population to crossover and continue to next generation
         self.__k = select_pres # Defines the tournament size, k=1 means random selection, larger k reduces the likelyhood of poor inidviuals selected as tourn winners
+        
         self.__score_table = dict() # Lookup table that records bistrings as keys and their simulated score as value
+        
         self.__max_vel = max_vel # maximum velocity which the GA can use to initialize an individual param
         self.__min_vel = min_vel  # Minimum velocity for GA initalize 
 
