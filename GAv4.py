@@ -77,13 +77,10 @@ class GA():
                     best_fitness = score
                     best = self.chromosome_to_params(self.population[score_i])
                     
-            tournament_winners = [self.tournament_selection() for _ in range(self.pop_size)]
-
             children = list()
 
             for i in range(0, self.pop_size, 2):
-                p1, p2 = tournament_winners[i], tournament_winners[i+1]
-
+                p1, p2 = [self.tournament_selection() for p in range(2)]
                 c1, c2 = self.crossover(p1, p2)
 
                 c1 = self.mutate(c1)

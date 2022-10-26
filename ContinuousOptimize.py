@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 def fitness_function(params):
    return (params[0]**2.0 + params[1]**2.0)
 
-ga = GA(fitness_function=fitness_function, num_genes=2, gene_min=-5, gene_max=5, bit_size=16, pop_size=100, mu=0.05, gens=100)
+ga = GA(fitness_function=fitness_function, num_genes=2, gene_min=-5, gene_max=5, bit_size=16, t_size=5, pop_size=100, mu=0.05, gens=100)
 
 ga.initalize()
 best_params, best_fitness = ga.run()

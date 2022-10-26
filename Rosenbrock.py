@@ -1,5 +1,5 @@
 """Tests GA class with finding root of a Rosenbrock function optimal solution should be located at (1,1)"""
-#from SampleGeneticAlgorithm import SampleGA
+from SampleGeneticAlgorithm import SampleGA
 from GAv4 import GA
 import matplotlib.pyplot as plt
 
@@ -9,9 +9,9 @@ def fitness_function(params):
 
 
 #ga = SampleGA(fitness_func=fitness_function, num_genes=2, pop_size=8,
-#              gene_lower_bound=-127, gene_upper_bound=127, select_pres=4, mutation_prob=0.05, generations=50)
+#             gene_lower_bound=-127, gene_upper_bound=127, select_pres=4, mutation_prob=0.05, generations=50)
 
-ga = GA(fitness_function=fitness_function, num_genes=2, gene_min=-127, gene_max=127, bit_size=8, pop_size=100, t_size = 5, mu=0.05, gens=100)
+ga = GA(fitness_function=fitness_function, num_genes=2, gene_min=-127, gene_max=127, bit_size=8, pop_size=100, t_size = 5, mu=0.05, gens=10)
 
 
 ga.initalize()

@@ -95,7 +95,7 @@ class SampleGA():
             parameters = [self.gene_to_parameter(g) for g in genes]
             if c not in self.scores_table.keys():
                 #fitness = self.fitness_func(parameters)
-                fitness = self.fitness_func(parameters[0], parameters[1])
+                fitness = self.fitness_func(parameters)
                 self.scores_table.update({c: fitness})
             else:
                 fitness = self.scores_table[c]
@@ -132,9 +132,9 @@ class SampleGA():
 
     # Initalize the GA with a starting population and generation
     def initalize(self):
-        self.population = [np.random.randint(0, 2, self.bit_count).tolist() for _ in range(self.pop_size)]
+        #self.population = [np.random.randint(0, 2, self.bit_count).tolist() for _ in range(self.pop_size)]
 
-        #self.population = self.generate_population()
+        self.population = self.generate_population()
 
     def run(self):
 
@@ -153,7 +153,8 @@ class SampleGA():
             bar = progressbar.ProgressBar(maxval=progressbar.UnknownLength)
             # while length of future population does not meet the specifed population size
 
-            while len(future_pop) < self.pop_size:
+            for i in range(0, self.pop_size, 2):
+            #while len(future_pop) < self.pop_size:
 
                 # select best parent 1 via Tournament Selection using current population
                 p1_fitness, parent1 = self.tournament_selection()
