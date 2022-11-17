@@ -3,6 +3,17 @@ import numpy as np
 
 
 class GA():
+    """
+    Defines a custom Genetic Algorithm
+
+    Args: 
+    fitness_function(:method:): A user defined function to evaulate an inidvidual's fitness or cost 
+    fitness_shape(:list:): Takes 4 subarguments, upper and lower range bound of the search space, the parameter count needed for the fitness function, and the resolution of the fitness
+    pop_size(:int:): The population target of each generation
+    k(:int:): The non-negative selection pressume exerted by the tournament selector (higher values increase speed of convergence, but raise likelyhood local minimum trapping)
+    gen_count(:int:): The number of generations simulated before termination
+    mu(:int:): The non-negative probability for mutation to occur
+    """
     def __init__(self, fitness_function, pop_size,fitness_shape=[-1,1,2,2], k=3, gen_count=10, mu=0.05) -> None:
         self.fitness_function = fitness_function
         
