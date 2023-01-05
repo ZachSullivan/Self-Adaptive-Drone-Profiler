@@ -1,6 +1,7 @@
 from sre_constants import SUCCESS
 import py_trees
 import time
+import airsim
 
 class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
     def __init__(self, waypoints, duration=None, velocity=2):
@@ -36,6 +37,7 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
         self.blackboard.drone.target = None
 
     def _get_target(self):
+        self.api_start_time = time.perf_counter()
         target = None
         if self.waypoints == None:
             target = None
@@ -57,7 +59,8 @@ class FlyToBBTargetsAction(py_trees.behaviour.Behaviour):
                 print("Found a target!")
                 target = self.blackboard.drone.target
 
-                self.blackboard.client.moveToPositionAsync(target.x_val, target.y_val, target.z_val, self.velocity) 
+                #self.blackboard.client.moveToPositionAsync(target.x_val, target.y_val, target.z_val, self.velocity) 
+                self.blackboard.client.moveOnPathAsync([target], self.velocity, drivetrain=airsim.DrivetrainType.ForwardOnly, yaw_mode=airsim.YawMode(False, 0))  
                 status = py_trees.common.Status.RUNNING
         else:
             status = py_trees.common.Status.RUNNING

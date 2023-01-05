@@ -1,13 +1,19 @@
 import airsim
 import py_trees
 import time
+import csv
+import numpy as np
 
+import matplotlib.pyplot as plt
+from Behaviors.LandAction import LandAction
 
 from GAv5 import GA
 
 from Behaviors.FlyToBBTargetsAction import FlyToBBTargetsAction
 from Behaviors.TakeoffAction import TakeoffAction
 from Behaviors.Terminate import Terminate
+from Behaviors.HoverAction import HoverAction
+
 
 from Blackboard.BlackboardManager import BlackboardManager
 
@@ -29,22 +35,6 @@ class NewDroneController():
         self.__mission_time = 0
 
         # Define the contents of the drone controller's BT blackboard
-
-        """self.blackboard = py_trees.blackboard.Client(name="Airsim")
-        self.blackboard.register_key(key="client", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="client", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="drone/waypoints", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="drone/waypoints", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="drone/height", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="drone/height", access=py_trees.common.Access.READ)
-        
-        self.blackboard.register_key(key="sim/status", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="sim/status", access=py_trees.common.Access.READ)
-
-        self.blackboard.client = airsim.MultirotorClient()
-        self.blackboard.client.confirmConnection()
-        self.blackboard.client.enableApiControl(True)
-        self.blackboard.client.armDisarm(True)"""
 
         self.blackboard_manager = BlackboardManager(name="Airsim")
         self.blackboard = self.blackboard_manager.getBlackboard()
@@ -76,18 +66,25 @@ class NewDroneController():
 
     def create_BT(self, takeoff_vel=1, waypoints=[], flight_vel=1):
 
+        self.terminate_bt = False
+
         root = py_trees.composites.Sequence("Root Sequence")
         flight_sequence = py_trees.composites.Sequence("Flight Sequence")
 
         
         # Create behavior tree behavior nodes
-        takeoff = TakeoffAction("Take Off", velocity=(takeoff_vel*-1), targetAltitude=5)
-        fly_to_target = FlyToBBTargetsAction(waypoints=waypoints, velocity=flight_vel)
+        takeoff = TakeoffAction("Take Off", velocity=(takeoff_vel*-1), targetAltitude=20)
+        fly_to_target = FlyToBBTargetsAction(waypoints=waypoints, duration = 20, velocity=flight_vel)
+        #fly_in_direction = FlyInDirection(direction, velocity=flight_vel)
         terminate = Terminate()
+        hover = HoverAction()
+
+        termination_sequence = py_trees.composites.Sequence("Termination Sequence")
+        termination_sequence.add_children([hover, terminate])
 
         # Construct the BT by linking the created nodes and sequences
         flight_sequence.add_children([takeoff, fly_to_target])
-        root.add_children([flight_sequence, terminate])
+        root.add_children([flight_sequence, termination_sequence])
 
         # Establish the root of the BT
         behavior_tree = py_trees.trees.BehaviourTree(root=root)
@@ -100,13 +97,14 @@ class NewDroneController():
 
         start_time = time.perf_counter()
         energy_measurements = []
-
+        velocities = []
         # Repeatedly tick the BT until termination call at a default rate of 500ms
         while self.terminate_bt == False:
             thrusts = []
+            
             elapsed_time = time.perf_counter() - start_time
             
-            bt.tick()
+            status = bt.tick()
 
 
             # Return a list of thrusts from each of the drone's rotors
@@ -120,24 +118,46 @@ class NewDroneController():
             # Return the velocity of the drone at that given tick
             multirotorStates = self.blackboard.client.getMultirotorState()
             velocity = multirotorStates.kinematics_estimated.linear_velocity.get_length()
+            velocities.append(velocity)
 
-            energy_measurements.append((thrust*velocity))
+            if status == py_trees.common.Status.FAILURE:
+                energy_measurements.append((10000))
+            else:
+                energy_measurements.append((thrust*velocity))
             
-            if self.blackboard.sim.status == py_trees.common.Status.SUCCESS:
+            if self.blackboard.sim.status == py_trees.common.Status.SUCCESS or status == py_trees.common.Status.FAILURE:
                 self.terminate_bt = True
+                print("TERMINATING BT ******************")
 
             time.sleep(0.5)
         
         #elapsed_time = time.perf_counter() - start_time
         self.__set_mission_time(elapsed_time)
         self.__set_total_energy(sum(energy_measurements))
+        self.record_data_csv(energy_measurements, velocities)
+
+    # OUT OF DATE
+    def record_data_csv(self, energy_i, vel_i):
+
+        total_distance = np.trapz(vel_i, dx=0.5)
+
+        #distances = list(range(0, int(total_distance)))
+        distances = list(range(0, int(total_distance)))
+
+        f = open("distance_power_data.csv", "w")
+        writer = csv.writer(f)
+        # Write the header row for the table
+        writer.writerow(['Distance (m)', 'Energy (J)', 'Velocity (m/s)'])
+
+        writer.writerows(zip(distances, energy_i[:len(distances)], vel_i))
+        f.close()
 
 def fitness_function(params):
     print("\n\n\nNEW FITNESS FUNCTION")
 
     takeoff_vel = params[0]
     flight_vel = params[1]
-    waypoints = [airsim.Vector3r(0,0,-5), airsim.Vector3r(10,0,-5)]
+    waypoints = [airsim.Vector3r(0,0,-20), airsim.Vector3r(20,0,-20)]
 
     drone = NewDroneController()
     bt = drone.create_BT(takeoff_vel, waypoints, flight_vel)
@@ -145,8 +165,30 @@ def fitness_function(params):
 
     
 
-    return (drone.get_total_energy() + drone.get_mission_time())
+    return (drone.get_total_energy() * drone.get_mission_time())
 
-ga = GA(fitness_function, fitness_shape=[2,10.5,2,3], pop_size=10, k=3, gen_count=5, mu=0.05)
+fitness_function([3,10])
+
+ga = GA(fitness_function, use_lookup=True, fitness_shape=[1,30,2,1], pop_size=10, k=3, gen_count=20, mu=0.05)
 ga.initialize()
-ga.run()
+#ga.run()
+
+fig, ax = plt.subplots()
+
+best_params, best_fitness = ga.run()
+print("> Best Solution:{0} W/ score: {1}\n".format(
+                best_params, best_fitness))
+
+winners = ga.gen_winners
+
+ax.plot(range(0, len(winners)), winners)
+plt.legend()
+plt.xlabel("Generations")
+plt.ylabel("Optimization Score")
+plt.title("Finding Optimal Energy + Time Score with Continuous Behavioral Parameter Values")
+plt.show()
+
+ga.visualize()
+
+fig, ax = plt.subplots()
+

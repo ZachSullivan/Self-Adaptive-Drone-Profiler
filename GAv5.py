@@ -1,6 +1,10 @@
 from multiprocessing.sharedctypes import Value
-import numpy as np
 
+import numpy as np
+import csv
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
 
 class GA():
     """
@@ -14,7 +18,7 @@ class GA():
     gen_count(:int:): The number of generations simulated before termination
     mu(:int:): The non-negative probability for mutation to occur
     """
-    def __init__(self, fitness_function, pop_size,fitness_shape=[-1,1,2,2], k=3, gen_count=10, mu=0.05) -> None:
+    def __init__(self, fitness_function, pop_size, use_lookup = True, fitness_shape=[-1,1,2,2], k=3, gen_count=10, mu=0.05) -> None:
         self.fitness_function = fitness_function
         
         self.lower_gene_bound = fitness_shape[0]
@@ -22,6 +26,8 @@ class GA():
         self.gene_count = fitness_shape[2]
         self.precision = fitness_shape[3]
         
+        self.use_lookup = use_lookup
+
         self.gene_len = 8
         self.chromosome_len = self.gene_len * self.gene_count
 
@@ -41,9 +47,12 @@ class GA():
     # initialize the first generation, with population of zero'd chromosomes then mutating
     def initialize(self):
 
-        zeroed_pop = [([0] * self.chromosome_len)] * self.gen_count
-        self.population = [self.mutate(c, 0.5) for c in zeroed_pop]
-        #self.population = np.random.randint(2, size=(self.gen_count, self.chromosome_len)).tolist()
+        zeroed_pop = [([0] * self.chromosome_len)] * self.pop_size
+        self.population = [self.mutate(c, 0.75) for c in zeroed_pop]
+        #self.population = np.random.randint(2, size=(self.pop_size, self.chromosome_len)).tolist()
+
+        for p in self.population:
+            print(str(self.chromosome_to_params(p)))
 
     def mutate(self, c, mu=0.05):
         c_copy = c.copy()
@@ -62,8 +71,13 @@ class GA():
         for g in genes:
             g = int(g, 2)
             # Normalize gene to [0, 1]:
-            max_gene = ((2**self.chromosome_len)-1)/2
+            max_gene = ((2**self.gene_len)-1)/2
             min_gene = -(max_gene)
+
+            # If g exceeds max gene, then the overflow becomes the negative seed value 
+            if g > max_gene:
+                g = max_gene - g
+               
             gene_normalized = (g - min_gene) / (max_gene - min_gene)
 
             # Then scale normalized gene to [x,y] rangebound:
@@ -75,21 +89,28 @@ class GA():
         params = self.chromosome_to_params(c)
         key = (''.join(str(a) for a in c))
 
-        if key not in self.fitness_table.keys():
+        if self.use_lookup == True:
+            if key not in self.fitness_table.keys():
+                self.fitness_table[key] = self.fitness_function(params)
+        else:
             self.fitness_table[key] = self.fitness_function(params)
 
         return self.fitness_table[key]
 
     def tournament_selection(self):
+
         for i in range(self.k):
-            c_idx = np.random.randint(len(self.population)-1)
+            if len(self.population) > 1:
+                c_idx = np.random.randint(len(self.population)-1)
+            else:
+                c_idx = np.random.randint(1)
             best_chromosome = self.population[c_idx]
             best_score = self.evaluate(best_chromosome)
             for j in self.population:
                 score = self.evaluate(j)
                 if score < best_score:
                     best_chromosome = j
-        
+
         return best_chromosome
 
     def crossover(self, p1, p2):
@@ -103,12 +124,66 @@ class GA():
 
         return c1, c2
 
+    def visualize(self):
+        fig, ax = plt.subplots()
+
+        X = []
+        Y = []
+        Z = list(self.fitness_table.values())
+
+        for c in self.fitness_table.keys():
+            params = self.chromosome_to_params(c)
+            X.append(params[0])
+            Y.append(params[1])
+        
+        df = pd.DataFrame(list(zip(X, Y, Z)), columns=["take_off_vel", "flight_vel", "score"])
+        #ax.pcolormesh([X,Y], cmap="autumn")
+        print(df)
+        # generating pairwise correlation
+        corr = df.corr()
+        sns.heatmap(corr, annot = True)
+        
+        sns.relplot(
+            data=df,
+            x='take_off_vel', y='flight_vel',
+            size='score', sizes=(10, 100),
+            hue='score',
+            palette='coolwarm',
+        )
+
+        plt.show()
+
+    def save_population_to_csv(self, population, generation):
+        # Open a new CSV file for writing
+        filename = f'adaptive_profiler_data.csv'
+        with open(filename, mode='a') as csv_file:
+            # Create a CSV writer object
+            writer = csv.writer(csv_file)
+
+            # Add a new table to the CSV file for the current generation
+            writer.writerow([f'Generation {generation}'])
+
+            # Write the header row for the table
+            writer.writerow(['Individual', 'Takeoff Velocity', 'Flight Velocity', 'Posture Cost'])
+
+            # Write the individual rows for the population
+            for i, individual in enumerate(population):
+                posture_cost = self.evaluate(individual)
+                params = self.chromosome_to_params(individual)
+                writer.writerow([i, params[0], params[1], posture_cost])
+        csv_file.close()
+
     def run(self):
         best_p, best_fitness = None, None
 
         for generation in range(self.gen_count):
 
             next_pop = list()
+
+
+            """for p in self.population:
+                print("SIIMULATING: " + str(self.chromosome_to_params(p)))
+                self.evaluate(p)"""
 
             for i in range(0, self.pop_size, 2):
 
@@ -138,4 +213,7 @@ class GA():
             self.gen_winners.append(best_fitness)
 
             self.population = next_pop
+
+            # Save population to csv
+            self.save_population_to_csv(self.population, generation)
         return best_p, best_fitness

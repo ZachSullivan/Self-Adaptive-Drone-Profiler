@@ -26,16 +26,34 @@ class Terminate(py_trees.behaviour.Behaviour):
             access=py_trees.common.Access.READ
         )
 
+        self.isComplete = False
+
     def update(self):
+
 
         # Teleport the drone back to the start, check if successful
         pose = self.blackboard.client.simGetVehiclePose()
-        pose.position.x_val = 0
-        pose.position.y_val = 0
-        pose.position.z_val = 0
-        self.blackboard.client.simSetVehiclePose(pose, True)
-        status  = py_trees.behaviour.common.Status.SUCCESS
-        self.blackboard.sim.status = status
+        print(pose.position)
+
+        if self.isComplete == True:
+            print("TERMINATION SUCCESSFUL")       
+            status = py_trees.common.Status.SUCCESS
+            
+            self.blackboard.sim.status = status
+        else:
+
+            self.blackboard.client.hoverAsync().join()
+
+            pose.position.x_val = 0
+            pose.position.y_val = 0
+            pose.position.z_val = 0
+            
+            self.blackboard.client.simSetVehiclePose(pose, True)
+            
+            self.blackboard.client.armDisarm(False)
+            self.isComplete = True
+            status = py_trees.common.Status.RUNNING
+      
         return status
 
 

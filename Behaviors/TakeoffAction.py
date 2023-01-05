@@ -55,27 +55,12 @@ class TakeoffAction(py_trees.behaviour.Behaviour):
             self.canTakeoff = True
         
     def update(self):
-        """
-        new_status = py_trees.common.Status.RUNNING
 
-        if self.canTakeoff == True:
-            print("TAKING OFF!!!")
-            self.blackboard.client.takeoffAsync()    
-            self.canTakeoff = False
-        else:
-            self.blackboard.drone.height = self.blackboard.client.getDistanceSensorData(distance_sensor_name="Height").distance
-        
-            print ("ALTITUDE: " + str(round(self.blackboard.drone.height)))
-
-            if round(self.blackboard.drone.height) == self.target_altitude:
-                new_status = py_trees.common.Status.SUCCESS
-
-        return new_status """
         self.blackboard.drone.height = self.blackboard.client.getDistanceSensorData(distance_sensor_name="Height").distance
 
         print("Altitude: " + str(round(self.blackboard.drone.height)))
 
-        if round(self.blackboard.drone.height) >= self.target_altitude:
+        if round(self.blackboard.drone.height) >= self.target_altitude or self.isComplete == True:
                     
             new_status = py_trees.common.Status.SUCCESS
             self.isComplete = True
